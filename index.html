@@ -38,6 +38,7 @@
   svg#hall{display:block;width:100%;min-width:0;height:auto;background:#fff}
   .seat{fill:var(--free);stroke:var(--free-line);stroke-width:1}
   .seat{cursor:pointer}
+  svg#hall{user-select:none;-webkit-user-select:none}
   .seat.taken{stroke:rgba(0,0,0,.45)}
   .selinfo{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#fafbfc}
   .selinfo .t{font-size:12px;color:var(--muted)}
@@ -198,7 +199,7 @@
     while(selG.firstChild) selG.removeChild(selG.firstChild);
     var codes = picks.filter(function(c){ return info[c]; });
     if(!codes.length){
-      panel.appendChild(mk("div", "hintx", "Нажимайте на места на схеме: каждое нажатие добавляет место в выбор (повторное — убирает). Справа появится, кому они отданы."));
+      panel.appendChild(mk("div", "hintx", "Нажимайте на места или протяните рамку по схеме, чтобы выбрать сразу несколько (повторное нажатие на место убирает его). Справа появится, кому они отданы."));
       return;
     }
     codes.forEach(function(c){
@@ -244,11 +245,52 @@
     updatePick();
     if(picks.length && mainEl.classList.contains("collapsed")) setCollapsed(false, false);
   }
+  var dragged = false;
   svg.addEventListener("click", function(e){
+    if(dragged){ dragged = false; return; }
     var r = e.target.closest ? e.target.closest("rect.seat") : null;
     if(!r) return;
     togglePick(r.getAttribute("data-c"));
   });
+
+  // выбор рамкой (мышь/перо): протяните прямоугольник по схеме
+  var band = null, bandStart = null, bandId = null;
+  function svgPt(e){
+    var p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+    return p.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  svg.addEventListener("pointerdown", function(e){
+    if(e.pointerType === "touch" || e.button !== 0) return;
+    bandStart = {sx:e.clientX, sy:e.clientY, p:svgPt(e)}; bandId = e.pointerId; dragged = false;
+  });
+  svg.addEventListener("pointermove", function(e){
+    if(!bandStart || e.pointerId !== bandId) return;
+    if(!band){
+      if(Math.abs(e.clientX - bandStart.sx) + Math.abs(e.clientY - bandStart.sy) < 6) return;
+      dragged = true;
+      try{ svg.setPointerCapture(bandId); }catch(x){}
+      band = el("rect", {fill:"rgba(11,87,208,.13)", stroke:"#0b57d0", "stroke-width":2.5, "stroke-dasharray":"8 5", "pointer-events":"none"});
+    }
+    var p = svgPt(e), a = bandStart.p;
+    band.setAttribute("x", Math.min(a.x, p.x)); band.setAttribute("y", Math.min(a.y, p.y));
+    band.setAttribute("width", Math.abs(p.x - a.x)); band.setAttribute("height", Math.abs(p.y - a.y));
+  });
+  function endBand(e){
+    if(!bandStart || (e && e.pointerId !== bandId)) return;
+    if(band){
+      var x1 = +band.getAttribute("x"), y1 = +band.getAttribute("y"), x2 = x1 + +band.getAttribute("width"), y2 = y1 + +band.getAttribute("height");
+      svg.removeChild(band); band = null;
+      SEATS.forEach(function(s){
+        if(s[4] >= x1 && s[4] <= x2 && s[5] >= y1 && s[5] <= y2 && picks.indexOf(s[0]) < 0) picks.push(s[0]);
+      });
+      updatePick();
+      if(picks.length && mainEl.classList.contains("collapsed")) setCollapsed(false, false);
+    }
+    try{ svg.releasePointerCapture(bandId); }catch(x){}
+    bandStart = null;
+  }
+  svg.addEventListener("pointerup", endBand);
+  svg.addEventListener("pointercancel", endBand);
   document.addEventListener("keydown", function(e){ if(e.key === "Escape"){ picks = []; updatePick(); } });
 
   // ---------- данные ----------
