@@ -16,6 +16,8 @@
   h1{font-size:19px;margin:0}
   .event{color:var(--muted);font-size:13px;margin-top:1px}
   .upd{font-size:12px;color:var(--muted);text-align:right}
+  .adm{display:block;text-align:center;margin-top:10px;font-size:13px;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:#fff}
+  .adm:hover{border-color:var(--accent)}
   .upd .bad{color:#b42318}
   .banner{background:#fff6dd;border:1px solid #efd88a;color:#6b5200;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px}
   .stats{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -120,6 +122,7 @@
         <div class="selinfo noprint" id="selInfo"></div>
         <ul id="legend"></ul>
         <p class="hint noprint">Нажмите на строку, чтобы подсветить эти места на схеме.</p>
+        <a class="adm noprint" id="admin" target="_blank" rel="noopener">🔒 Вход для администратора</a>
       </div>
     </aside>
   </div>
@@ -143,6 +146,7 @@
   document.getElementById("evTitle").textContent = EV_NAME;
   document.getElementById("event").textContent = EV_DATE + " · " + VENUE;
   document.title = EV_NAME + " — схема зала";
+  document.getElementById("admin").href = CFG.adminUrl || "https://docs.google.com/spreadsheets/d/15YGoNxhDrNiXFMfVgSH-Elz7Zayk7eO1x8BCHzYVX9Y/edit";
   if(CFG.hidePrint) document.getElementById("btnPrint").style.display = "none";
 
   // ---------- рисуем схему ----------
