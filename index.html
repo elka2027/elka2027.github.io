@@ -351,6 +351,7 @@
       ul.appendChild(li);
     });
     updatePick();
+    if(typeof fit === "function") fit();
     if(special.taken){ var p = document.createElement("li"); p.style.cursor = "default"; p.innerHTML = '<span class="nm" style="color:#667085;font-size:12px">Места для людей с ОВ заняты: ' + special.taken + ' из ' + special.all + '</span>'; ul.appendChild(p); }
   }
 
