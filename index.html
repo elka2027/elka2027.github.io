@@ -36,7 +36,15 @@
   .hallwrap{overflow:auto;max-height:80vh;padding:6px}
   svg#hall{display:block;width:100%;min-width:0;height:auto;background:#fff}
   .seat{fill:var(--free);stroke:var(--free-line);stroke-width:1}
+  .seat{cursor:pointer}
   .seat.taken{stroke:rgba(0,0,0,.45)}
+  .selinfo{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#fafbfc}
+  .selinfo .t{font-size:12px;color:var(--muted)}
+  .selinfo .who{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:16px;font-weight:650;overflow-wrap:anywhere}
+  .selinfo .who.free{color:#2e7d32}
+  .selinfo .note{margin-top:4px;font-size:14px;overflow-wrap:anywhere}
+  .selinfo .hintx{color:var(--muted);font-size:13px}
+  .selinfo button{margin-top:8px;font-size:12px;padding:3px 8px}
   .seat.dim{opacity:.18}
   .num{font:13px system-ui,Arial,sans-serif;fill:#1d2433;text-anchor:middle;dominant-baseline:central;pointer-events:none}
   .lbl{font-family:system-ui,Arial,sans-serif;fill:#1d2433}
@@ -73,6 +81,7 @@
     .main.collapsed .legend h2{writing-mode:horizontal-tb!important;margin:0}
     .main.collapsed .lhead{flex-direction:row}
     .seat.dim{opacity:1}
+    #selHalo,#selBox{display:none}
   }
 </style>
 </head>
@@ -105,6 +114,7 @@
     <aside class="card legend" id="legendCard">
       <div class="lhead"><h2>Кому отдано</h2><button id="btnLegend" class="noprint" title="Свернуть панель">Свернуть ▸</button></div>
       <div class="body">
+        <div class="selinfo noprint" id="selInfo"></div>
         <ul id="legend"></ul>
         <p class="hint noprint">Нажмите на строку, чтобы подсветить эти места на схеме.</p>
       </div>
@@ -160,9 +170,47 @@
     info[s[0]] = s;
   });
 
+  // ---------- выделение места ----------
+  var halo = el("rect", {id:"selHalo", fill:"none", stroke:"#ffffff", "stroke-width":9, rx:3, visibility:"hidden", "pointer-events":"none"});
+  var box = el("rect", {id:"selBox", fill:"none", stroke:"#0b57d0", "stroke-width":4.5, rx:3, visibility:"hidden", "pointer-events":"none"});
+  function mk(tag, cls, text){ var n = document.createElement(tag); if(cls) n.className = cls; if(text != null) n.textContent = text; return n; }
+  function updatePick(){
+    var panel = document.getElementById("selInfo"); panel.innerHTML = "";
+    if(!pick || !info[pick]){
+      halo.setAttribute("visibility", "hidden"); box.setAttribute("visibility", "hidden");
+      panel.appendChild(mk("div", "hintx", "Нажмите на место на схеме, чтобы увидеть, кому оно отдано."));
+      return;
+    }
+    var s = info[pick], o = owners[pick], w = s[6];
+    [halo, box].forEach(function(r){
+      r.setAttribute("x", s[4] - w/2 - 1.5); r.setAttribute("y", s[5] - SH/2 - 1.5);
+      r.setAttribute("width", w + 3); r.setAttribute("height", SH + 3); r.setAttribute("visibility", "visible");
+    });
+    panel.appendChild(mk("div", "t", s[1] + " · ряд " + s[2] + " · место " + s[3]));
+    var who = mk("div", "who" + (o ? "" : " free"));
+    if(o){ var sw = mk("span", "sw"); sw.style.background = o.color; who.appendChild(sw); who.appendChild(mk("span", "", o.name)); }
+    else who.textContent = "Свободно";
+    panel.appendChild(who);
+    if(notes[pick]) panel.appendChild(mk("div", "note", notes[pick]));
+    var b = mk("button", "", "Снять выделение"); b.addEventListener("click", function(){ setPick(null); });
+    panel.appendChild(b);
+  }
+  function setPick(code){
+    pick = code; updatePick();
+    if(code && mainEl.classList.contains("collapsed")) setCollapsed(false, false);
+  }
+  svg.addEventListener("click", function(e){
+    var r = e.target.closest ? e.target.closest("rect.seat") : null;
+    if(!r) return;
+    var c = r.getAttribute("data-c"); setPick(pick === c ? null : c);
+  });
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape") setPick(null); });
+
   // ---------- данные ----------
   var FREE = "\u0000free";
   var owners = {};        // код -> {name, color}
+  var notes = {};         // код -> примечание
+  var pick = null;        // выбранное место
   var selected = null;
 
   function parseCSV(text){
@@ -182,12 +230,16 @@
   function fromCSV(text){
     var rows = parseCSV(text), h = rows.shift() || [], out = {};
     function idx(name){ for(var i = 0; i < h.length; i++) if(h[i].trim().toLowerCase() === name) return i; return -1; }
-    var ic = idx("код"), io = idx("кому отдано"), ik = idx("цвет");
+    var ic = idx("код"), io = idx("кому отдано"), ik = idx("цвет"), inn = idx("примечание");
+    notes = {};
     if(ic < 0 || io < 0) throw new Error("Не найдены столбцы «Код» и «Кому отдано»");
     var palette = {}, n = 0;
     rows.forEach(function(r){
       var code = (r[ic] || "").trim(), name = (r[io] || "").trim();
-      if(!code || !name) return;
+      if(!code) return;
+      var nt = inn >= 0 ? (r[inn] || "").trim() : "";
+      if(nt) notes[code] = nt;
+      if(!name) return;
       var color = ik >= 0 ? (r[ik] || "").trim() : "";
       if(!/^#[0-9a-fA-F]{6}$/.test(color)){
         if(!palette[name]) palette[name] = FALLBACK[n++ % FALLBACK.length];
@@ -199,12 +251,13 @@
   }
 
   function demoData(){
+    notes = {};
     var A = {name:"Школа №1", color:"#e6194B"}, B = {name:"Администрация", color:"#4363d8"},
         C = {name:"Гости", color:"#ffe119"}, D = {name:"Спонсоры", color:"#911eb4"}, out = {};
     SEATS.forEach(function(s){
       var sec = s[1], row = +s[2], num = +s[3];
       if(sec === "Партер" && row <= 3) out[s[0]] = A;
-      else if(sec === "Партер" && row >= 4 && row <= 6 && num <= 20) out[s[0]] = B;
+      else if(sec === "Партер" && row >= 4 && row <= 6 && num <= 20){ out[s[0]] = B; notes[s[0]] = row === 4 ? "архиепископ" : (row === 5 ? "викарий" : "секретарь"); }
       else if(sec === "Партер" && row >= 12 && row <= 14 && num >= 13 && num <= 29) out[s[0]] = C;
       else if(sec.indexOf("Ложа") === 0 || (sec === "Балкон центральный" && row <= 2)) out[s[0]] = D;
     });
@@ -225,7 +278,7 @@
       var o = owners[s[0]], e = seatEl[s[0]], sec = s[1];
       if(o){ e.rect.style.fill = o.color; e.rect.classList.add("taken"); e.text.style.fill = textOn(o.color); }
       else { e.rect.style.fill = ""; e.rect.classList.remove("taken"); e.text.style.fill = ""; }
-      e.title.textContent = sec + ", ряд " + s[2] + ", место " + s[3] + (o ? " — " + o.name : " — свободно");
+      e.title.textContent = sec + ", ряд " + s[2] + ", место " + s[3] + (o ? " — " + o.name : " — свободно") + (notes[s[0]] ? " (" + notes[s[0]] + ")" : "");
       e.rect.classList.toggle("dim", !!selected && (selected === FREE ? !!o : (!o || o.name !== selected)));
       if(sec === SPECIAL){ special.all++; if(o) special.taken++; }
       else {
@@ -256,6 +309,7 @@
       li.addEventListener("click", function(){ selected = (selected === nm) ? null : nm; paint(); });
       ul.appendChild(li);
     });
+    updatePick();
     if(special.taken){ var p = document.createElement("li"); p.style.cursor = "default"; p.innerHTML = '<span class="nm" style="color:#667085;font-size:12px">Места для людей с ОВ заняты: ' + special.taken + ' из ' + special.all + '</span>'; ul.appendChild(p); }
   }
 
