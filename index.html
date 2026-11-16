@@ -336,8 +336,8 @@
     var st = document.getElementById("stats"), html = "";
     function card(k, a, b){ var p = b ? Math.round(a / b * 100) : 0; return '<div class="stat"><div class="k">' + k + '</div><div class="v">' + a + ' <small>из ' + b + '</small></div><div class="bar"><i style="width:' + p + '%"></i></div></div>'; }
     html += '<div class="stat"><div class="k">Свободно</div><div class="v">' + (all - taken) + ' <small>из ' + all + '</small></div><div class="bar"><i style="width:' + (all ? Math.round((all-taken)/all*100) : 0) + '%;background:#2e9d5b"></i></div></div>';
-    html += card("Раздано всего", taken, all);
-    STAT_GROUPS.forEach(function(g){ html += card(g[0] + " — раздано", grp[g[0]]||0, total[g[0]]||0); });
+    html += card("Роздано всего", taken, all);
+    STAT_GROUPS.forEach(function(g){ html += card(g[0] + " — роздано", grp[g[0]]||0, total[g[0]]||0); });
     st.innerHTML = html;
 
     var ul = document.getElementById("legend"); ul.innerHTML = "";
