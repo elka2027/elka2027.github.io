@@ -42,6 +42,10 @@
   .selinfo .t{font-size:12px;color:var(--muted)}
   .selinfo .who{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:16px;font-weight:650;overflow-wrap:anywhere}
   .selinfo .who.free{color:#2e7d32}
+  .selinfo .grp{margin-top:8px;padding-top:6px;border-top:1px solid var(--line)}
+  .selinfo .who{font-size:15px}
+  .selinfo .cnt{font-weight:400;color:var(--muted)}
+  .selinfo .seats{margin-top:3px;font-size:13px;overflow-wrap:anywhere}
   .selinfo .note{margin-top:4px;font-size:14px;overflow-wrap:anywhere}
   .selinfo .hintx{color:var(--muted);font-size:13px}
   .selinfo button{margin-top:8px;font-size:12px;padding:3px 8px}
@@ -170,47 +174,85 @@
     info[s[0]] = s;
   });
 
-  // ---------- выделение места ----------
-  var halo = el("rect", {id:"selHalo", fill:"none", stroke:"#ffffff", "stroke-width":9, rx:3, visibility:"hidden", "pointer-events":"none"});
-  var box = el("rect", {id:"selBox", fill:"none", stroke:"#0b57d0", "stroke-width":4.5, rx:3, visibility:"hidden", "pointer-events":"none"});
+  // ---------- выделение мест (несколько) ----------
+  var selG = el("g", {"pointer-events":"none"});
   function mk(tag, cls, text){ var n = document.createElement(tag); if(cls) n.className = cls; if(text != null) n.textContent = text; return n; }
+  function ranges(list){
+    // список мест одного ряда -> «1–4, 7, 9–10»
+    var nums = list.map(function(s){ return parseInt(s[3], 10); });
+    if(nums.some(isNaN)) return list.map(function(s){ return s[3]; }).join(", ");
+    nums.sort(function(a, b){ return a - b; });
+    var out = [], st = nums[0], pr = nums[0], i;
+    for(i = 1; i <= nums.length; i++){
+      if(i < nums.length && nums[i] === pr + 1){ pr = nums[i]; continue; }
+      out.push(st === pr ? "" + st : st + "–" + pr);
+      st = pr = nums[i];
+    }
+    return out.join(", ");
+  }
   function updatePick(){
     var panel = document.getElementById("selInfo"); panel.innerHTML = "";
-    if(!pick || !info[pick]){
-      halo.setAttribute("visibility", "hidden"); box.setAttribute("visibility", "hidden");
-      panel.appendChild(mk("div", "hintx", "Нажмите на место на схеме, чтобы увидеть, кому оно отдано."));
+    while(selG.firstChild) selG.removeChild(selG.firstChild);
+    var codes = picks.filter(function(c){ return info[c]; });
+    if(!codes.length){
+      panel.appendChild(mk("div", "hintx", "Нажимайте на места на схеме: каждое нажатие добавляет место в выбор (повторное — убирает). Справа появится, кому они отданы."));
       return;
     }
-    var s = info[pick], o = owners[pick], w = s[6];
-    [halo, box].forEach(function(r){
-      r.setAttribute("x", s[4] - w/2 - 1.5); r.setAttribute("y", s[5] - SH/2 - 1.5);
-      r.setAttribute("width", w + 3); r.setAttribute("height", SH + 3); r.setAttribute("visibility", "visible");
+    codes.forEach(function(c){
+      var s = info[c], w = s[6];
+      [["#ffffff", 9], ["#0b57d0", 4.5]].forEach(function(p){
+        el("rect", {x:s[4]-w/2-1.5, y:s[5]-SH/2-1.5, width:w+3, height:SH+3, fill:"none", stroke:p[0], "stroke-width":p[1], rx:3}, selG);
+      });
     });
-    panel.appendChild(mk("div", "t", s[1] + " · ряд " + s[2] + " · место " + s[3]));
-    var who = mk("div", "who" + (o ? "" : " free"));
-    if(o){ var sw = mk("span", "sw"); sw.style.background = o.color; who.appendChild(sw); who.appendChild(mk("span", "", o.name)); }
-    else who.textContent = "Свободно";
-    panel.appendChild(who);
-    if(notes[pick]) panel.appendChild(mk("div", "note", notes[pick]));
-    var b = mk("button", "", "Снять выделение"); b.addEventListener("click", function(){ setPick(null); });
+    svg.appendChild(selG);
+    // группировка: владелец + примечание
+    var groups = {}, order = [];
+    codes.forEach(function(c){
+      var o = owners[c], nt = notes[c] || "";
+      var key = o ? o.name + "\u0001" + nt : "\u0000free";
+      if(!groups[key]){ groups[key] = {o:o, nt:nt, seats:[]}; order.push(key); }
+      groups[key].seats.push(info[c]);
+    });
+    order.sort(function(a, b){ return groups[a].o ? (groups[b].o ? 0 : -1) : 1; });
+    panel.appendChild(mk("div", "t", "Выбрано мест: " + codes.length));
+    order.forEach(function(k){
+      var g = groups[k], box = mk("div", "grp");
+      var who = mk("div", "who" + (g.o ? "" : " free"));
+      if(g.o){ var sw = mk("span", "sw"); sw.style.background = g.o.color; who.appendChild(sw); who.appendChild(mk("span", "", g.o.name + (g.nt ? " — " + g.nt : ""))); }
+      else who.textContent = "Свободно";
+      who.appendChild(mk("span", "cnt", " · " + g.seats.length));
+      box.appendChild(who);
+      // по секторам и рядам
+      var rows = {}, rk = [];
+      g.seats.forEach(function(s){ var key = s[1] + "|" + s[2]; if(!rows[key]){ rows[key] = []; rk.push(key); } rows[key].push(s); });
+      rk.forEach(function(key){
+        var l = rows[key], s0 = l[0];
+        var txt = s0[1] === SPECIAL ? s0[1] + ": " + l.length : s0[1] + ", ряд " + s0[2] + ", места " + ranges(l);
+        box.appendChild(mk("div", "seats", txt));
+      });
+      panel.appendChild(box);
+    });
+    var b = mk("button", "", "Снять выделение"); b.addEventListener("click", function(){ picks = []; updatePick(); });
     panel.appendChild(b);
   }
-  function setPick(code){
-    pick = code; updatePick();
-    if(code && mainEl.classList.contains("collapsed")) setCollapsed(false, false);
+  function togglePick(code){
+    var i = picks.indexOf(code);
+    if(i >= 0) picks.splice(i, 1); else picks.push(code);
+    updatePick();
+    if(picks.length && mainEl.classList.contains("collapsed")) setCollapsed(false, false);
   }
   svg.addEventListener("click", function(e){
     var r = e.target.closest ? e.target.closest("rect.seat") : null;
     if(!r) return;
-    var c = r.getAttribute("data-c"); setPick(pick === c ? null : c);
+    togglePick(r.getAttribute("data-c"));
   });
-  document.addEventListener("keydown", function(e){ if(e.key === "Escape") setPick(null); });
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape"){ picks = []; updatePick(); } });
 
   // ---------- данные ----------
   var FREE = "\u0000free";
   var owners = {};        // код -> {name, color}
   var notes = {};         // код -> примечание
-  var pick = null;        // выбранное место
+  var picks = [];         // выбранные места
   var selected = null;
 
   function parseCSV(text){
