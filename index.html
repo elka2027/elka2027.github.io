@@ -243,6 +243,10 @@
     st.innerHTML = html;
 
     var ul = document.getElementById("legend"); ul.innerHTML = "";
+    var fl = document.createElement("li"); if(selected === FREE) fl.className = "sel";
+    fl.innerHTML = '<span class="sw" style="background:var(--free);border-color:var(--free-line)"></span><span class="nm">Свободно</span><span class="ct">' + (all - taken) + '</span>';
+    fl.addEventListener("click", function(){ selected = (selected === FREE) ? null : FREE; paint(); });
+    ul.appendChild(fl);
     var names = Object.keys(counts).sort(function(a, b){ return counts[b].n - counts[a].n || a.localeCompare(b, "ru"); });
     if(!names.length){ var li0 = document.createElement("li"); li0.className = "empty"; li0.style.cursor = "default"; li0.textContent = "Пока никому не отдано"; ul.appendChild(li0); }
     names.forEach(function(nm){
@@ -252,10 +256,6 @@
       li.addEventListener("click", function(){ selected = (selected === nm) ? null : nm; paint(); });
       ul.appendChild(li);
     });
-    var fl = document.createElement("li"); if(selected === FREE) fl.className = "sel";
-    fl.innerHTML = '<span class="sw" style="background:var(--free);border-color:var(--free-line)"></span><span class="nm">Свободно</span><span class="ct">' + (all - taken) + '</span>';
-    fl.addEventListener("click", function(){ selected = (selected === FREE) ? null : FREE; paint(); });
-    ul.appendChild(fl);
     if(special.taken){ var p = document.createElement("li"); p.style.cursor = "default"; p.innerHTML = '<span class="nm" style="color:#667085;font-size:12px">Места для людей с ОВ заняты: ' + special.taken + ' из ' + special.all + '</span>'; ul.appendChild(p); }
   }
 
